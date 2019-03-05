@@ -221,6 +221,34 @@ const fetchCommitsDetails = async ({
     repo,
   });
   const commits = await octokit.paginate(options);
+
+  // Sort PR commits by topo order.
+  // This makes some assumptions for now:
+  // * All commits in a PR are part of a connected component.
+  // * Each commit has exactly one parent commit (no merges).
+  // Code-wise this is also pretty slow O(n^2). A hashtable
+  // implemenation would be better but we don't know typescript :).
+  const pr = await octokit.pulls.get({
+    number: pullRequestNumber,
+    owner,
+    repo
+  });
+  for (var i = 0; i < commits.length; i++) {
+    if (commits[i].sha === pr.data.head.sha) {
+      // move ith commit to zero index
+      commits.splice(0, 0, commits.splice(i, 1)[0]);
+    }
+  }
+
+  for (var j = 0; j < commits.length; j++) {
+    for (var i = 0; i < commits.length; i++) {
+      if (commits[i].sha === commits[j].parents[0].sha) {
+        // move ith commit to j + 1 index
+        commits.splice(j + 1, 0, commits.splice(i, 1)[0]);
+      }
+    }
+  }
+  commits.reverse();
   return commits.map(getCommitsDetails);
 };
 
